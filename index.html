@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La Jolla Kelp Forecast</title>
+<style>
+:root{
+  color-scheme:light;
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10);
+  --actual:#0b0b0b; --cool:#2a78d6; --normal:#7a786f; --warm:#eb6834; --heat:#b42f2c;
+  --track:#e1e0d9; --tip:#ffffff;
+  --sky:#eaf3fb; --water1:#bfe0ef; --water2:#2f6f8f; --floor:#c9b48a; --floor2:#a8916a;
+  --kelp:#5d7a2a; --kelp2:#7f9a37; --canopy:#8a7a24; --stub:#5d7a2a;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme:dark;
+    --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
+    --actual:#f0efec; --cool:#3987e5; --normal:#8f8d85; --warm:#d95926; --heat:#d63a8a;
+    --track:#383835; --tip:#262624;
+    --sky:#14202a; --water1:#16384a; --water2:#071a24; --floor:#4a3f2c; --floor2:#3a3122;
+    --kelp:#7d9c3a; --kelp2:#9ab84a; --canopy:#b3a03a; --stub:#7d9c3a;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
+  --actual:#f0efec; --cool:#3987e5; --normal:#8f8d85; --warm:#d95926; --heat:#d63a8a;
+  --track:#383835; --tip:#262624;
+  --sky:#14202a; --water1:#16384a; --water2:#071a24; --floor:#4a3f2c; --floor2:#3a3122;
+  --kelp:#7d9c3a; --kelp2:#9ab84a; --canopy:#b3a03a; --stub:#7d9c3a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.45}
+main{max-width:980px;margin:0 auto;padding:24px 16px 40px}
+h1{font-size:1.35rem;margin:0 0 6px;font-weight:650;letter-spacing:-0.01em}
+.sub{margin:0 0 18px;color:var(--ink2);font-size:.95rem;max-width:72ch}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+.top{display:grid;grid-template-columns:1.7fr 1fr;gap:18px;align-items:start}
+@media (max-width:720px){.top{grid-template-columns:1fr}}
+.scene{border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--water1)}
+.scene svg{display:block;width:100%;height:auto}
+.stalk{transform-box:fill-box;transform-origin:50% 100%;transition:transform .7s cubic-bezier(.2,.8,.2,1),opacity .6s}
+.canopy{transition:opacity .6s,transform .7s;transform-box:fill-box;transform-origin:50% 50%}
+.readout{display:flex;flex-direction:column;gap:10px}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid var(--border);width:fit-content;color:var(--ink2)}
+.badge .dot{width:8px;height:8px;border-radius:50%}
+.yearbig{font-size:2.2rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.val{font-size:1.6rem;font-weight:650;font-variant-numeric:tabular-nums}
+.val small{font-size:.9rem;font-weight:500;color:var(--ink2)}
+.muted{color:var(--muted);font-size:.85rem}
+.ink2{color:var(--ink2);font-size:.88rem}
+.meter{height:8px;border-radius:4px;background:var(--track);overflow:hidden}
+.meter > div{height:100%;border-radius:4px;background:var(--kelp);transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.viz{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:start}
+.temp{display:flex;flex-direction:column;align-items:center;gap:6px}
+.temp .tt{font-size:.72rem;font-weight:600;color:var(--ink2);text-align:center;line-height:1.2}
+.vs{position:relative;flex:1;width:100%;min-height:110px;display:flex;justify-content:center;touch-action:none;cursor:pointer;border-radius:8px}
+.vs:focus-visible{outline:2px solid var(--cool);outline-offset:3px}
+.vs .track{position:absolute;top:8px;bottom:8px;left:12px;width:14px;border-radius:7px;background:linear-gradient(to top,var(--cool) 10%,var(--normal) 33%,var(--warm) 67%,var(--heat) 90%);box-shadow:inset 0 0 0 1px var(--border)}
+.vs .thumb{position:absolute;left:5px;width:28px;height:28px;margin-top:-14px;border-radius:50%;background:var(--surface);border:3px solid var(--ink);box-shadow:0 2px 6px rgba(0,0,0,.25);transition:top .25s cubic-bezier(.2,.8,.2,1)}
+.vs .stop{position:absolute;left:34px;font-size:.7rem;color:var(--muted);transform:translateY(-50%);white-space:nowrap}
+.vs .stop.on{color:var(--ink);font-weight:650}
+.vs.locked{cursor:not-allowed}
+.vs.locked .thumb{border-color:var(--muted);border-style:dashed}
+.vs.locked .stop{opacity:.55}
+.temp .tv{font-size:.72rem;text-align:center;color:var(--ink2);line-height:1.25;font-variant-numeric:tabular-nums}
+.temp .tv b{color:var(--ink)}
+.ysl{margin-top:10px}
+.ysl label{display:flex;justify-content:space-between;font-size:.85rem;font-weight:600;margin-bottom:2px}
+.ysl label span{font-weight:500;color:var(--ink2)}
+.ysl .ticks{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted)}
+.sl label{display:flex;justify-content:space-between;font-size:.85rem;font-weight:600;margin-bottom:6px}
+.sl label span{font-weight:500;color:var(--ink2)}
+input[type=range]{width:100%;accent-color:var(--ink);height:28px;cursor:pointer}
+.hint{font-size:.78rem;color:var(--muted);margin-top:4px}
+.row2{display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap}
+button.play{border:1px solid var(--border);background:var(--ink);color:var(--surface);border-radius:999px;padding:6px 14px;font-size:.85rem;cursor:pointer;font-family:inherit}
+button.play:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--cool);outline-offset:2px}
+h2{font-size:1rem;margin:22px 0 8px;font-weight:650}
+.chartwrap{position:relative}
+.chartwrap svg{display:block;width:100%;height:auto;overflow:visible}
+.tip{position:absolute;pointer-events:none;background:var(--tip);color:var(--ink);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:.8rem;box-shadow:0 4px 14px rgba(0,0,0,.12);min-width:170px;opacity:0;transition:opacity .08s}
+.tip b{font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;font-size:.82rem;color:var(--ink2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:3px;border-radius:2px;display:inline-block}
+table{border-collapse:collapse;width:100%;font-size:.85rem;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--grid)}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+th{color:var(--ink2);font-weight:600}
+tr.cur td{background:color-mix(in srgb, var(--grid) 55%, transparent);font-weight:600}
+.tablewrap{overflow-x:auto}
+.notes{font-size:.85rem;color:var(--ink2);margin-top:16px;padding-left:18px}
+.notes li{margin-bottom:5px}
+</style>
+</head>
+<body>
+<main>
+  <h1>La Jolla kelp forecast: 2020 to 2028</h1>
+  <p class="sub">Slide through the years to watch the kelp forest change. The temperature slider shows each year's ocean. It's real measured data through 2025; from 2026 on, you choose it. Our model predicts each year's kelp from the year before's ocean.</p>
+
+  <div class="card">
+    <div class="top">
+      <div>
+        <div class="viz">
+          <div class="temp">
+            <div class="tt">Ocean temp<br>(this year)</div>
+            <div class="vs" id="vs" role="slider" tabindex="0" aria-label="Ocean temperature this year" aria-valuemin="0" aria-valuemax="3">
+              <div class="track"></div>
+              <div class="thumb" id="thumb"></div>
+            </div>
+            <div class="tv" id="tval"></div>
+          </div>
+          <div class="scene"><svg id="scene" viewBox="0 0 600 330" role="img" aria-label="Illustration of the kelp forest sized to the selected year's kelp canopy"></svg></div>
+        </div>
+        <div class="ysl" style="margin-left:102px">
+          <label for="ys">Year <span id="ysv"></span></label>
+          <input type="range" id="ys" min="2020" max="2028" step="1" value="2026">
+          <div class="ticks" id="yticks"></div>
+          <div class="row2"><button class="play" id="play" type="button">▶ Play 2020 → 2028</button><span class="muted" id="sshint"></span></div>
+        </div>
+      </div>
+      <div class="readout" aria-live="polite">
+        <span class="badge" id="badge"><span class="dot" id="bdot"></span><span id="btxt"></span></span>
+        <div class="yearbig" id="yr"></div>
+        <div class="val" id="val"></div>
+        <div class="muted" id="rng"></div>
+        <div>
+          <div class="ink2" style="margin-bottom:4px">Compared with a healthy year (2009: 1.11 km²)</div>
+          <div class="meter"><div id="meter"></div></div>
+        </div>
+        <div class="ink2" id="why"></div>
+      </div>
+    </div>
+
+
+  </div>
+
+  <h2>Peak kelp canopy, 2020–2028</h2>
+  <div class="card">
+    <div class="chartwrap" id="wrap">
+      <svg id="chart" role="img" aria-label="Line chart of peak kelp canopy from 2020 to 2028 with the selected scenario"></svg>
+      <div class="tip" id="tip"></div>
+    </div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <h2>Recent years and predictions</h2>
+  <div class="card tablewrap"><table id="tbl"></table></div>
+
+  <ul class="notes">
+    <li><b>2026 is a true prediction</b>, because 2025's ocean conditions are already known. <b>2027–2028 are scenarios</b>: the model predicts each year's kelp from the previous year's temperature and upwelling, so you pick what the ocean is like in 2026–2027.</li>
+    <li>Ranges show the model's typical error: predictions are usually within about 3.5× of the real value. In testing, the model beat simply guessing the average the majority of the time.</li>
+    <li>Since 2023, kelp has been lower than the model expected, so these predictions may be on the high side. The model shows a pattern.</li>
+    <li>Data: Kelpwatch (Landsat kelp canopy), SIO Shore Stations Program (Scripps Pier temperature), NOAA CUTI upwelling index.</li>
+  </ul>
+</main>
+
+<script>
+(function(){
+  var actual={2020:0.126,2021:0.165,2022:0.119,2023:0.015,2024:0.016,2025:0.065};
+  var p2026={v:0.271,lo:0.077,hi:0.944};
+  var scen=[
+    {t:-0.5, id:"cool",  name:"Cool",     long:"Cool year",       desc:"0.5°C cooler than normal, stronger upwelling", v:0.428,lo:0.123,hi:1.492,color:"--cool"},
+    {t:0, id:"normal",name:"Normal",   long:"Normal year",     desc:"average temperature and upwelling",           v:0.172,lo:0.049,hi:0.602,color:"--normal"},
+    {t:1.0, id:"warm",  name:"Warm",     long:"Warm year",       desc:"1°C warmer than normal, weaker upwelling",    v:0.041,lo:0.011,hi:0.146,color:"--warm"},
+    {t:1.5, id:"heat",  name:"Heatwave", long:"Marine heatwave", desc:"1.5°C warmer than normal, weaker upwelling",  v:0.024,lo:0.006,hi:0.087,color:"--heat"}
+  ];
+  // measured yearly average surface-temperature anomaly at Scripps Pier (°C)
+  var yearTemp={2020:0.366,2021:-0.205,2022:0.242,2023:-0.415,2024:-0.155,2025:-0.104};
+  var TMIN=-1, TMAX=2;
+  var BEST=1.113, Y0=2020, Y1=2028, LAST=2025;
+  var st={year:2026, s:1};
+  try{var sv=JSON.parse(localStorage.getItem("kelpForecast")||"null"); if(sv){st.year=sv.year||2026; st.s=(sv.s>=0&&sv.s<=3)?sv.s:1;}}catch(e){}
+  function save(){try{localStorage.setItem("kelpForecast",JSON.stringify(st));}catch(e){}}
+  function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+  function fmt(v){return v<0.01?v.toFixed(3):v.toFixed(2);}
+  function el(t,a,p){var e=document.createElementNS("http://www.w3.org/2000/svg",t);for(var k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+  function info(y){
+    var S=scen[st.s];
+    if(y<=LAST) return {v:actual[y],kind:"Observed",color:"--actual"};
+    if(y===2026) return {v:p2026.v,lo:p2026.lo,hi:p2026.hi,kind:"Prediction",color:"--actual"};
+    return {v:S.v,lo:S.lo,hi:S.hi,kind:"Scenario",color:S.color};
+  }
+
+  /* ---------- kelp scene ---------- */
+  var scene=document.getElementById("scene"), MAXS=16, stalks=[], canopies=[];
+  (function build(){
+    var d=el("defs",{},scene);
+    var lg=el("linearGradient",{id:"wg",x1:0,y1:0,x2:0,y2:1},d);
+    el("stop",{offset:"0","stop-color":"var(--water1)"},lg); el("stop",{offset:"1","stop-color":"var(--water2)"},lg);
+    el("rect",{x:0,y:0,width:600,height:44,fill:"var(--sky)"},scene);
+    el("rect",{x:0,y:44,width:600,height:286,fill:"url(#wg)"},scene);
+    el("path",{d:"M0 44 Q 37 38 75 44 T 150 44 T 225 44 T 300 44 T 375 44 T 450 44 T 525 44 T 600 44",fill:"none",stroke:"var(--water1)","stroke-width":3,opacity:.9},scene);
+    // order stalks so growth spreads across the scene instead of filling left to right
+    var order=[7,3,11,1,13,5,9,15,0,8,4,12,2,10,6,14];
+    var xs=[];for(var i=0;i<MAXS;i++)xs.push(28+i*(544/(MAXS-1)));
+    var gStalk=el("g",{},scene), gCan=el("g",{},scene);
+    order.forEach(function(idx,rank){
+      var x=xs[idx], h=264-((idx*37)%18), w=(idx%2?1:-1)*(6+(idx%3)*3);
+      var g=el("g",{class:"stalk"},gStalk);
+      var top=300-h;
+      el("path",{d:"M"+x+" 300 C "+(x+w)+" "+(300-h*0.33)+", "+(x-w)+" "+(300-h*0.66)+", "+x+" "+top,fill:"none",stroke:"var(--kelp)","stroke-width":3,"stroke-linecap":"round"},g);
+      for(var k=1;k<6;k++){
+        var yy=300-h*k/6, side=(k%2?1:-1);
+        el("ellipse",{cx:x+side*9,cy:yy,rx:10,ry:3.6,fill:"var(--kelp2)",transform:"rotate("+(side*-28)+" "+(x+side*9)+" "+yy+")",opacity:.95},g);
+      }
+      el("ellipse",{cx:x,cy:302,rx:7,ry:3,fill:"var(--floor2)"},g);
+      var c=el("g",{class:"canopy"},gCan);
+      el("ellipse",{cx:x-10,cy:47,rx:16,ry:4,fill:"var(--canopy)"},c);
+      el("ellipse",{cx:x+9,cy:48,rx:14,ry:3.6,fill:"var(--canopy)"},c);
+      el("ellipse",{cx:x,cy:45,rx:10,ry:3,fill:"var(--kelp2)"},c);
+      stalks[rank]=g; canopies[rank]=c;
+    });
+    el("path",{d:"M0 300 Q 80 292 160 300 T 320 300 T 480 300 T 600 298 L 600 330 L 0 330 Z",fill:"var(--floor)"},scene);
+    var lbl=el("text",{x:12,y:30,"font-size":12,fill:"var(--muted)"},scene); lbl.textContent="surface canopy";
+  })();
+  function paintScene(v){
+    var f=Math.min(1,v/BEST);
+    var full=v>0.004?Math.max(1,Math.round(f*MAXS)):0;
+    for(var i=0;i<MAXS;i++){
+      if(i<full){ stalks[i].style.transform="scaleY(1)"; stalks[i].style.opacity=1; canopies[i].style.opacity=1; canopies[i].style.transform="scale(1)"; }
+      else { stalks[i].style.transform="scaleY(0.14)"; stalks[i].style.opacity=0.55; canopies[i].style.opacity=0; canopies[i].style.transform="scale(.3)"; }
+    }
+  }
+
+  /* ---------- readout ---------- */
+  var ys=document.getElementById("ys"), vs=document.getElementById("vs"), thumb=document.getElementById("thumb");
+  (function(){var t=document.getElementById("yticks"),h="",wide=window.innerWidth>560;for(var y=2020;y<=2028;y++)h+='<span>'+(wide||y%2===0?(y===2020||y===2028?y:"’"+String(y).slice(2)):"")+'</span>';t.innerHTML=h;})();
+  function tPos(t){ return 1-(t-TMIN)/(TMAX-TMIN); } // 0 = top
+  scen.forEach(function(sc,i){ var d=document.createElement("div"); d.className="stop"; d.dataset.i=i; d.textContent=sc.name; d.style.top="calc(8px + "+tPos(sc.t)+" * (100% - 16px))"; vs.appendChild(d); });
+  function locked(){ return st.year<=LAST; }
+  function setScen(i){ if(locked()) return; i=Math.max(0,Math.min(3,i)); if(i===st.s) return; st.s=i; save(); paint(); }
+  function vsIndexAt(clientY){ var r=vs.getBoundingClientRect(), f=(clientY-r.top-8)/(r.height-16), t=TMAX-Math.max(0,Math.min(1,f))*(TMAX-TMIN), best=0;
+    scen.forEach(function(sc,i){ if(Math.abs(sc.t-t)<Math.abs(scen[best].t-t)) best=i; }); return best; }
+  var dragging=false;
+  vs.addEventListener("pointerdown",function(e){ if(locked()) return; dragging=true;vs.setPointerCapture(e.pointerId);setScen(vsIndexAt(e.clientY));});
+  vs.addEventListener("pointermove",function(e){if(dragging)setScen(vsIndexAt(e.clientY));});
+  vs.addEventListener("pointerup",function(){dragging=false;});
+  vs.addEventListener("keydown",function(e){var k=e.key; if(k==="ArrowUp"||k==="ArrowRight"){setScen(st.s+1);e.preventDefault();} else if(k==="ArrowDown"||k==="ArrowLeft"){setScen(st.s-1);e.preventDefault();} else if(k==="Home"){setScen(0);e.preventDefault();} else if(k==="End"){setScen(3);e.preventDefault();}});
+  function paintReadout(){
+    var y=st.year, I=info(y), S=scen[st.s];
+    document.getElementById("yr").textContent=y;
+    document.getElementById("btxt").textContent=I.kind+(I.kind==="Scenario"?": after a "+S.long.toLowerCase():"");
+    document.getElementById("bdot").style.background="var("+I.color+")";
+    document.getElementById("val").innerHTML=fmt(I.v)+' <small>km² peak kelp canopy</small>';
+    document.getElementById("rng").textContent=I.lo!=null?"Likely range "+fmt(I.lo)+"–"+fmt(I.hi)+" km²":"Measured by satellite (Kelpwatch)";
+    document.getElementById("meter").style.width=Math.max(1,Math.min(100,I.v/BEST*100))+"%";
+    var why;
+    if(y<=LAST) why=(y>=2023?"Kelp has stayed very low since 2023, even in cooler years.":"Observed after the 2014–16 marine heatwave collapse.");
+    else if(y===2026) why="2026's kelp is predicted from 2025's real ocean (slightly cooler than normal, a bit more upwelling): "+Math.round(p2026.v/actual[2025])+"× the 2025 amount. The 2026 ocean you choose ("+S.long.toLowerCase()+") sets 2027's kelp: "+fmt(S.v)+" km².";
+    else why="If "+(y-1)+" is a "+S.long.toLowerCase()+" ("+S.desc+").";
+    document.getElementById("why").textContent=why;
+    document.getElementById("ysv").textContent=y+" · "+I.kind;
+    document.getElementById("sshint").textContent=locked()?"Temperature is real measured data through 2025. Move to 2026–2028 to choose it.":(y===2026?"Drag the temperature slider: 2026's ocean shapes 2027's kelp.":y===2027?"Drag the temperature slider: 2027's ocean shapes 2028's kelp.":"Drag the temperature slider to change the 2027–2028 forecast.");
+    ys.value=y;
+    var L=locked(), T=L?yearTemp[y]:S.t, sign=T>0?"+":(T<0?"−":"");
+    thumb.style.top="calc(8px + "+tPos(T)+" * (100% - 16px))";
+    vs.classList.toggle("locked",L); vs.setAttribute("aria-disabled",L?"true":"false");
+    vs.setAttribute("aria-valuenow",L?T:st.s); vs.setAttribute("aria-valuetext",L?("Measured "+y+": "+sign+Math.abs(T).toFixed(2)+" °C"):(S.long+": "+S.desc));
+    [].forEach.call(vs.querySelectorAll(".stop"),function(d){d.classList.toggle("on",!L&&+d.dataset.i===st.s);});
+    document.getElementById("tval").innerHTML=y+": <b>"+sign+Math.abs(T).toFixed(2)+"°C</b><br>"+(L?"measured 🔒":"your choice");
+    paintScene(I.v);
+  }
+
+  /* ---------- chart ---------- */
+  var svg=document.getElementById("chart"), wrap=document.getElementById("wrap"), tip=document.getElementById("tip");
+  function drawChart(){
+    var W=Math.max(320,wrap.clientWidth), narrow=W<560, H=narrow?260:300;
+    var m={t:14,r:narrow?16:24,b:30,l:narrow?40:48}, iw=W-m.l-m.r, ih=H-m.t-m.b;
+    svg.setAttribute("viewBox","0 0 "+W+" "+H); svg.innerHTML="";
+    var S=scen[st.s], maxV=Math.max(0.5,Math.ceil(Math.max(p2026.hi,S.hi)*4)/4);
+    function x(y){return m.l+(y-Y0)/(Y1-Y0)*iw;}
+    function yv(v){return m.t+ih-v/maxV*ih;}
+    var g=el("g",{},svg), xd=(x(LAST)+x(2026))/2;
+    el("rect",{x:xd,y:m.t,width:x(Y1)-xd+8,height:ih,fill:css("--grid"),opacity:.35},g);
+    el("line",{x1:xd,x2:xd,y1:m.t,y2:m.t+ih,stroke:css("--axis"),"stroke-dasharray":"3 3"},g);
+    var a=el("text",{x:xd-6,y:m.t+12,"text-anchor":"end","font-size":11,fill:css("--muted")},g);a.textContent="Observed";
+    var b=el("text",{x:xd+6,y:m.t+12,"font-size":11,fill:css("--muted")},g);b.textContent="Predicted";
+    var step=maxV>1?0.5:0.25;
+    for(var v=0;v<=maxV+1e-9;v+=step){var yy=yv(v);el("line",{x1:m.l,x2:m.l+iw,y1:yy,y2:yy,stroke:css("--grid")},g);var t=el("text",{x:m.l-8,y:yy+4,"text-anchor":"end","font-size":11,fill:css("--muted")},g);t.textContent=v.toFixed(2);}
+    el("line",{x1:m.l,x2:m.l+iw,y1:m.t+ih,y2:m.t+ih,stroke:css("--axis")},g);
+    for(var yr=Y0;yr<=Y1;yr++){ if(narrow&&yr%2) continue; var t2=el("text",{x:x(yr),y:m.t+ih+18,"text-anchor":"middle","font-size":11,fill:css("--muted")},g);t2.textContent=yr;}
+    var yt=el("text",{transform:"translate(11,"+(m.t+ih/2)+") rotate(-90)","text-anchor":"middle","font-size":11,fill:css("--ink2")},g);yt.textContent="km²";
+    // range: 2026 error bar + selected scenario band
+    var band=[[2026,p2026.lo,p2026.hi],[2027,S.lo,S.hi],[2028,S.lo,S.hi]];
+    el("polygon",{points:band.map(function(r){return x(r[0])+","+yv(r[2]);}).concat(band.slice().reverse().map(function(r){return x(r[0])+","+yv(r[1]);})).join(" "),fill:css(S.color),opacity:.14},g);
+    // faint other scenarios
+    scen.forEach(function(o,i){ if(i===st.s) return;
+      el("path",{d:"M"+x(2026)+","+yv(p2026.v)+"L"+x(2027)+","+yv(o.v)+"L"+x(2028)+","+yv(o.v),fill:"none",stroke:css(o.color),"stroke-width":1.2,"stroke-dasharray":"4 4",opacity:.35},g);
+    });
+    // observed line
+    var d="";for(var y=Y0;y<=LAST;y++)d+=(y===Y0?"M":"L")+x(y)+","+yv(actual[y]);
+    el("path",{d:d,fill:"none",stroke:css("--actual"),"stroke-width":2,"stroke-linejoin":"round"},g);
+    // prediction + selected scenario
+    el("path",{d:"M"+x(LAST)+","+yv(actual[LAST])+"L"+x(2026)+","+yv(p2026.v),fill:"none",stroke:css("--actual"),"stroke-width":2,"stroke-dasharray":"6 4"},g);
+    el("path",{d:"M"+x(2026)+","+yv(p2026.v)+"L"+x(2027)+","+yv(S.v)+"L"+x(2028)+","+yv(S.v),fill:"none",stroke:css(S.color),"stroke-width":2.5,"stroke-dasharray":"6 4"},g);
+    for(var y2=Y0;y2<=Y1;y2++){ var I=info(y2), cur=y2===st.year;
+      el("circle",{cx:x(y2),cy:yv(I.v),r:cur?7:4,fill:cur?css(I.color):css("--surface"),stroke:css(I.color),"stroke-width":2},g);
+    }
+    var lab=el("text",{x:x(2028)-4,y:yv(S.v)-10,"text-anchor":"end","font-size":11.5,"font-weight":600,fill:css("--ink")},g);lab.textContent=S.long+": "+fmt(S.v);
+    // hover + click
+    var cross=el("line",{y1:m.t,y2:m.t+ih,stroke:css("--axis"),opacity:0},g);
+    var hit=el("rect",{x:m.l-10,y:m.t,width:iw+20,height:ih,fill:"transparent",style:"cursor:pointer"},g);
+    function yrAt(evt){var r=svg.getBoundingClientRect(),sx=(evt.clientX-r.left)*(W/r.width);return Math.max(Y0,Math.min(Y1,Math.round(Y0+(sx-m.l)/iw*(Y1-Y0))));}
+    function show(evt){
+      var yr=yrAt(evt), I=info(yr), r=svg.getBoundingClientRect();
+      cross.setAttribute("x1",x(yr));cross.setAttribute("x2",x(yr));cross.setAttribute("opacity",1);
+      tip.innerHTML='<div style="font-weight:650;margin-bottom:2px">'+yr+' · '+I.kind+'</div><div><b>'+fmt(I.v)+' km²</b></div>'+(I.lo!=null?'<div style="color:var(--muted);font-size:.75rem">likely '+fmt(I.lo)+'–'+fmt(I.hi)+'</div>':'')+'<div style="color:var(--muted);font-size:.72rem;margin-top:3px">click to show in the forest</div>';
+      tip.style.opacity=1; var px=x(yr)*(r.width/W), tw=tip.offsetWidth, left=px+12; if(left+tw>wrap.clientWidth) left=px-tw-12;
+      tip.style.left=Math.max(4,left)+"px"; tip.style.top="6px";
+    }
+    hit.addEventListener("mousemove",show);
+    hit.addEventListener("mouseleave",function(){cross.setAttribute("opacity",0);tip.style.opacity=0;});
+    hit.addEventListener("click",function(e){stop();st.year=yrAt(e);save();paint();});
+  }
+  document.getElementById("legend").innerHTML='<span><span class="sw" style="background:var(--actual)"></span>Observed (solid) and 2026 prediction (dashed)</span>'+scen.map(function(s){return '<span><span class="sw" style="background:var('+s.color+')"></span>'+s.long+'</span>';}).join("");
+
+  /* ---------- table ---------- */
+  function drawTable(){
+    var h='<thead><tr><th>Year</th><th>Type</th><th>Peak kelp (km²)</th><th>Likely range</th></tr></thead><tbody>';
+    for(var y=2021;y<=Y1;y++){ var I=info(y);
+      h+='<tr'+(y===st.year?' class="cur"':'')+'><td>'+y+'</td><td>'+I.kind+(I.kind==="Scenario"?" ("+scen[st.s].long.toLowerCase()+")":"")+'</td><td>'+fmt(I.v)+'</td><td>'+(I.lo!=null?fmt(I.lo)+'–'+fmt(I.hi):'—')+'</td></tr>';
+    }
+    document.getElementById("tbl").innerHTML=h+'</tbody>';
+  }
+
+  var tempCol=document.querySelector(".temp"), sceneBox=document.querySelector(".scene");
+  function syncHeight(){ tempCol.style.height=Math.max(150,sceneBox.offsetHeight)+"px"; }
+  function paint(){syncHeight();paintReadout();drawChart();drawTable();}
+  ys.addEventListener("input",function(){stop();st.year=+ys.value;save();paint();});
+
+  var timer=null, pb=document.getElementById("play");
+  function stop(){ if(timer){clearInterval(timer);timer=null;pb.textContent="▶ Play 2020 → 2028";} }
+  pb.addEventListener("click",function(){
+    if(timer){stop();return;}
+    st.year=Y0; paint(); pb.textContent="❚❚ Pause";
+    timer=setInterval(function(){ if(st.year>=Y1){stop();return;} st.year++; save(); paint(); },1100);
+  });
+
+  paint();
+  window.addEventListener("resize",function(){syncHeight();drawChart();});
+  if(window.matchMedia){var mq=window.matchMedia("(prefers-color-scheme: dark)");(mq.addEventListener?mq.addEventListener("change",paint):mq.addListener(paint));}
+})();
+</script>
+</body>
+</html>
